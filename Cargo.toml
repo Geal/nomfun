@@ -6,3 +6,9 @@ edition = "2018"
 
 [dependencies]
 nom = "4.2"
+bencher = "*"
+fnv = "*"
+
+[[bench]]
+name = "json"
+harness = false
