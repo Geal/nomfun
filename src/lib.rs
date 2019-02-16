@@ -52,7 +52,13 @@ pub fn delimited<I: Clone, O1, O2, O3, E, F, G, H>(input: I, first: F, sep: G, s
 pub fn take_while<'a, T: 'a, F>(input: &'a [T], cond: F) -> IResult<&'a [T], &'a [T]>
   where F: Fn(T) -> bool,
         &'a [T]: nom::InputTakeAtPosition<Item=T> {
-  input.split_at_position(cond)
+  input.split_at_position(|c| !cond(c))
+}
+
+pub fn take_while1<'a, T: 'a, F>(input: &'a [T], cond: F) -> IResult<&'a [T], &'a [T]>
+  where F: Fn(T) -> bool,
+        &'a [T]: nom::InputTakeAtPosition<Item=T> {
+  input.split_at_position1(|c| !cond(c), ErrorKind::TakeWhile1)
 }
 
 pub fn map<I, O1, O2, F, G>(input: I, first: F, second: G) -> IResult<I, O2>
@@ -90,6 +96,40 @@ pub fn many0<I: Clone+InputLength, O, F>(input: I, mut f: F) -> IResult<I, Vec<O
 
         if i.input_len() == 0 {
           return Ok((i, acc));
+        }
+      }
+    }
+  }
+}
+
+pub fn many1<I: Clone+InputLength, O, F>(input: I, mut f: F) -> IResult<I, Vec<O>>
+  where F: FnMut(I) -> IResult<I, O> {
+
+  let mut i = input;
+  let mut acc = Vec::new();
+
+  loop {
+    let i_ = i.clone();
+    match f(i_) {
+      Err(_) => if acc.is_empty() {
+        return Err(Err::Error(error_position!(i, ErrorKind::Many1)))
+      } else {
+        return Ok((i, acc));
+      },
+      Ok((i2, o)) => {
+        if i.input_len() == i2.input_len() {
+          return Err(Err::Error(error_position!(i, ErrorKind::Many1)))
+        }
+
+        i = i2;
+        acc.push(o);
+
+        if i.input_len() == 0 {
+          if acc.is_empty() {
+            return Err(Err::Error(error_position!(i, ErrorKind::Many1)))
+          } else {
+            return Ok((i, acc));
+          }
         }
       }
     }
@@ -135,8 +175,6 @@ pub fn separated_list<I: Clone+InputLength, O, O2, F, G>(input: I, mut sep: G, m
   }
 }
 
-//fn char<F>(c: char) -> F
-//  where F: Fn(&[u8]) -> IResult<&[u8], char> {
 pub fn char(c: char) -> impl Fn(&[u8]) -> IResult<&[u8], char> {
 
   move |i:&[u8]| {

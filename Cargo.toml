@@ -8,7 +8,16 @@ edition = "2018"
 nom = "4.2"
 bencher = "*"
 fnv = "*"
+jemallocator = "0.1.8"
+
+#[[bench]]
+#name = "json"
+#harness = false
 
 [[bench]]
-name = "json"
+name = "http"
+harness = false
+
+[[bench]]
+name = "nom-http"
 harness = false
