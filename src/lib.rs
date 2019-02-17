@@ -55,6 +55,7 @@ pub fn take_while<'a, T: 'a, F>(input: &'a [T], cond: F) -> IResult<&'a [T], &'a
   input.split_at_position(|c| !cond(c))
 }
 
+#[inline(always)]
 pub fn take_while1<'a, T: 'a, F>(input: &'a [T], cond: F) -> IResult<&'a [T], &'a [T]>
   where F: Fn(T) -> bool,
         &'a [T]: nom::InputTakeAtPosition<Item=T> {
