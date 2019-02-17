@@ -3,9 +3,6 @@ extern crate nom;
 #[macro_use]
 extern crate bencher;
 
-extern crate fnv;
-
-use fnv::FnvHashMap as HashMap;
 use bencher::{Bencher, black_box};
 
 use nom::{digit, be_u32, IResult, Err, ErrorKind, InputTakeAtPosition, Convert, recognize_float,
