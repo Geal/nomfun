@@ -80,7 +80,7 @@ pub fn many0<I: Clone+InputLength, O, F>(input: I, mut f: F) -> IResult<I, Vec<O
   where F: FnMut(I) -> IResult<I, O> {
 
   let mut i = input;
-  let mut acc = Vec::new();
+  let mut acc = Vec::with_capacity(4);
 
   loop {
     let i_ = i.clone();
@@ -106,7 +106,7 @@ pub fn many1<I: Clone+InputLength, O, F>(input: I, mut f: F) -> IResult<I, Vec<O
   where F: FnMut(I) -> IResult<I, O> {
 
   let mut i = input;
-  let mut acc = Vec::new();
+  let mut acc = Vec::with_capacity(4);
 
   loop {
     let i_ = i.clone();
