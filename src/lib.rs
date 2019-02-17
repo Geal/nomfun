@@ -102,33 +102,39 @@ pub fn many0<I: Clone+InputLength, O, F>(input: I, mut f: F) -> IResult<I, Vec<O
   }
 }
 
-pub fn many1<I: Clone+InputLength, O, F>(input: I, mut f: F) -> IResult<I, Vec<O>>
-  where F: FnMut(I) -> IResult<I, O> {
+pub fn many1<I: Clone+Copy+InputLength, O, F>(input: I, f: F) -> IResult<I, Vec<O>>
+  where F: Fn(I) -> IResult<I, O> {
+  //many1!(input, f)
 
   let mut i = input;
-  let mut acc = Vec::with_capacity(4);
 
-  loop {
-    let i_ = i.clone();
-    match f(i_) {
-      Err(_) => if acc.is_empty() {
-        return Err(Err::Error(error_position!(i, ErrorKind::Many1)))
-      } else {
-        return Ok((i, acc));
-      },
-      Ok((i2, o)) => {
-        if i.input_len() == i2.input_len() {
-          return Err(Err::Error(error_position!(i, ErrorKind::Many1)))
-        }
+  let i_ = i.clone();
+  match f(i_) {
+    Err(_) => {
+      return Err(Err::Error(error_position!(i, ErrorKind::Many1)))
+    },
+    Ok((i2, o)) => {
+      let mut acc = Vec::with_capacity(4);
+      acc.push(o);
+      let mut i = i2;
 
-        i = i2;
-        acc.push(o);
-
-        if i.input_len() == 0 {
-          if acc.is_empty() {
-            return Err(Err::Error(error_position!(i, ErrorKind::Many1)))
-          } else {
+      loop {
+        let i_ = i.clone();
+        match f(i_) {
+          Err(_) => {
             return Ok((i, acc));
+          },
+          Ok((i2, o)) => {
+            if i.input_len() == i2.input_len() {
+              return Err(Err::Error(error_position!(i, ErrorKind::Many1)))
+            }
+
+            i = i2;
+            acc.push(o);
+
+            if i.input_len() == 0 {
+              return Ok((i, acc));
+            }
           }
         }
       }
