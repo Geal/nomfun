@@ -30,29 +30,36 @@ struct Header<'a> {
 }
 
 fn is_token(c: u8) -> bool {
-    match c {
-        128...255 => false,
-        0...31    => false,
-        b'('      => false,
-        b')'      => false,
-        b'<'      => false,
-        b'>'      => false,
-        b'@'      => false,
-        b','      => false,
-        b';'      => false,
-        b':'      => false,
-        b'\\'     => false,
-        b'"'      => false,
-        b'/'      => false,
-        b'['      => false,
-        b']'      => false,
-        b'?'      => false,
-        b'='      => false,
-        b'{'      => false,
-        b'}'      => false,
-        b' '      => false,
-        _         => true,
-    }
+    const MASK: u128 = ((1 << b'(')
+        | (1 << b')')
+        | (1 << b'<')
+        | (1 << b'>')
+        | (1 << b'@')
+        | (1 << b',')
+        | (1 << b';')
+        | (1 << b':')
+        | (1 << b'\\')
+        | (1 << b'"')
+        | (1 << b'/')
+        | (1 << b'[')
+        | (1 << b']')
+        | (1 << b'?')
+        | (1 << b'=')
+        | (1 << b'{')
+        | (1 << b'}')
+        | (1 << b' '));
+    const M: [u32; 8] = [
+        0xffff_ffff,
+        (MASK >> 32) as u32,
+        (MASK >> 64) as u32,
+        (MASK >> 96) as u32,
+        0xffff_ffff,
+        0xffff_ffff,
+        0xffff_ffff,
+        0xffff_ffff,
+    ];
+
+    M[(c / 32) as usize] & (1 << (c % 32)) == 0
 }
 
 fn not_line_ending(c: u8) -> bool {
