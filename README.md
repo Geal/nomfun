@@ -19,13 +19,6 @@ test small_test            ... bench:      63,261 ns/iter (+/- 12,063) = 337 MB/
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 4 measured
 
-Running target/release/deps/json-26693d6b4b918e1f
-
-running 1 test
-test manytest ... ignored
-
-test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out
-
 Running target/release/deps/nom_http-897516bd33a05864
 
 running 4 tests
@@ -46,3 +39,31 @@ Also, I have a feeling it could fix the UX issue around `Incomplete` usage bette
 the `CompleteStr` and `CompleteByteSlice` types :)
 
 So, please help me optimize this!
+
+## Preliminary results
+
+After merging PR #1:
+
+```
+running 4 tests
+test bigger_test           ... bench:     329,767 ns/iter (+/- 31,125) = 324 MB/s
+test httparse_example_test ... bench:       1,490 ns/iter (+/- 115) = 471 MB/s
+test one_test              ... bench:         894 ns/iter (+/- 120) = 325 MB/s
+test small_test            ... bench:      63,525 ns/iter (+/- 16,218) = 336 MB/s
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 4 measured
+```
+
+After rewriting `many1` and inlining `take_while1`:
+
+```
+running 4 tests
+test bigger_test           ... bench:     314,365 ns/iter (+/- 17,212) = 340 MB/s
+test httparse_example_test ... bench:       1,400 ns/iter (+/- 89) = 502 MB/s
+test one_test              ... bench:         841 ns/iter (+/- 44) = 346 MB/s
+test small_test            ... bench:      56,874 ns/iter (+/- 9,368) = 375 MB/s
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 4 measured
+```
+
+Performance is now within 5% of nom.
