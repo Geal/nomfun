@@ -9,7 +9,8 @@ use fnv::FnvHashMap as HashMap;
 use bencher::{Bencher, black_box};
 
 use nom::{digit, be_u32, IResult, Err, ErrorKind, InputTakeAtPosition, Convert, recognize_float,
-  ParseTo, Slice, InputLength, Needed,HexDisplay};
+  ParseTo, Slice, InputLength, Needed, HexDisplay, InputTake, Compare, CompareResult, need_more,
+  Context};
 
 
 named!(first<u32>, flat_map!(digit, parse_to!(u32)));
@@ -199,9 +200,19 @@ pub fn char(c: char) -> impl Fn(&[u8]) -> IResult<&[u8], char> {
   }
 }
 
-pub fn tag<'b, 'a: 'b>(t: &'a [u8]) -> impl Fn(&'b [u8]) -> IResult<&'b [u8], &'b [u8]> {
+pub fn tag<'b, 'a: 'b>(t: &'a [u8]) -> impl Fn(&'b [u8]) -> IResult<&'b [u8], &'b [u8], u32> {
   move |i:&'b [u8]| {
-    tag!(i, t)
+    let tag_len = t.input_len();
+    let res: IResult<_, _, u32> = match i.compare(t) {
+      CompareResult::Ok => Ok(i.take_split(tag_len)),
+      CompareResult::Incomplete => need_more(i, Needed::Size(tag_len)),
+      CompareResult::Error => {
+        let e: ErrorKind<u32> = ErrorKind::Tag;
+        Err(Err::Error(Context::Code(i, e)))
+      }
+    };
+
+    res
   }
 }
 
