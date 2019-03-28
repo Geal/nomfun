@@ -11,7 +11,7 @@ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 use bencher::{black_box, Bencher};
 
-use nom::IResult;
+//use nom::IResult;
 use nomfun::*;
 
 #[derive(Debug)]
@@ -70,8 +70,8 @@ fn is_version(c: u8) -> bool {
 
 //named!(line_ending, alt!(tag!("\r\n") | tag!("\n")));
 
-fn line_ending<'a>(i: &'a [u8]) -> IResult<&'a[u8], &'a[u8]> {
-  tag(&b"\r\n"[..])(i).or(tag(&b"\n"[..])(i))
+fn line_ending<'a>(i: &'a [u8]) -> IResult<&'a[u8], &'a[u8], (&'a[u8], u32)> {
+  tag::<(&[u8], u32)>(&b"\r\n"[..])(i).or(tag(&b"\n"[..])(i))
 }
 
 /*
