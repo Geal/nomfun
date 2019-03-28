@@ -10,9 +10,19 @@ bencher = "*"
 fnv = "*"
 jemallocator = "0.1.8"
 
-#[[bench]]
-#name = "json"
-#harness = false
+[profile.release]
+debug = true
+lto = true
+codegen-units = 1
+
+[profile.bench]
+debug = true
+lto = true
+codegen-units = 1
+
+[[bench]]
+name = "json"
+harness = false
 
 [[bench]]
 name = "http"

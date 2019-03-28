@@ -182,6 +182,7 @@ pub fn separated_list<I: Clone+InputLength, O, O2, F, G>(input: I, mut sep: G, m
   }
 }
 
+#[inline(always)]
 pub fn char(c: char) -> impl Fn(&[u8]) -> IResult<&[u8], char> {
 
   move |i:&[u8]| {
