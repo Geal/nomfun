@@ -47,6 +47,7 @@ pub enum ErrorKind {
   Tag,
   TakeWhile,
   TakeWhile1,
+  ParseTo,
 }
 
 pub trait Er<I> {
@@ -157,6 +158,14 @@ pub fn or<'b, I: Clone, O, E: Er<I>>(input: I, fns: &'b[&'b Fn(I) -> IResult<I, 
   Err(Err::Error(E::from_error_kind(input, ErrorKind::Alt)))
 }
 
+pub fn preceded<I: Clone, O1, O2, E: Er<I>, F, G>(input: I, first: F, second: G) -> IResult<I, O2, E>
+  where F: Fn(I) -> IResult<I, O1, E>,
+        G: Fn(I) -> IResult<I, O2, E> {
+
+  let (input, o1) = first(input)?;
+  second(input)
+}
+
 pub fn separated<I: Clone, O1, O2, O3, E: Er<I>, F, G, H>(input: I, first: F, sep: G, second: H) -> IResult<I, (O1, O3), E>
   where F: Fn(I) -> IResult<I, O1, E>,
         G: Fn(I) -> IResult<I, O2, E>,
@@ -197,8 +206,8 @@ pub fn take_while1<'a, T: 'a, F, E: Er<&'a[T]>>(input: &'a [T], cond: F) -> IRes
   }
 }
 
-pub fn map<I, O1, O2, F, G>(input: I, first: F, second: G) -> IResult<I, O2>
-  where F: Fn(I) -> IResult<I, O1>,
+pub fn map<I, O1, O2, E: Er<I>, F, G>(input: I, first: F, second: G) -> IResult<I, O2, E>
+  where F: Fn(I) -> IResult<I, O1, E>,
         G: Fn(O1) -> O2 {
 
   first(input).map(|(i, o1)| (i, second(o1)))

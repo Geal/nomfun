@@ -9,8 +9,8 @@ extern crate fnv;
 use fnv::FnvHashMap as HashMap;
 use bencher::{Bencher, black_box};
 
-use nom::{digit, be_u32, IResult, Err, ErrorKind, InputTakeAtPosition, Convert, recognize_float,
-  ParseTo, Slice, InputLength, Needed,HexDisplay};
+//use {digit, be_u32, IResult, Err, ErrorKind, InputTakeAtPosition, Convert, recognize_float,
+//  ParseTo, Slice, InputLength, Needed,HexDisplay};
 use nomfun::*;
 use std::fmt::Debug;
 
@@ -35,17 +35,27 @@ fn sp2(input: &[u8]) -> IResult<&[u8], &[u8]> {
   take_while(input, |c| chars.contains(&c))
 }
 
+// compat function because I don't want to rewrite nom::recognize_float just for this
+fn convert_rec_float<'a, E: Er<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a [u8], E> {
+  match nom::recognize_float(input) {
+    Ok((i, o)) => Ok((i, o)),
+    Err(nom::Err::Incomplete(_)) => Err(Err::Incomplete(Needed::Unknown)),
+    Err(nom::Err::Error(_)) => Err(Err::Error(E::from_error_kind(input, ErrorKind::ParseTo))),
+    Err(nom::Err::Failure(_)) => Err(Err::Failure(E::from_error_kind(input, ErrorKind::ParseTo))),
+  }
+}
+
 //named!(float<f64>, flat_map!(recognize_float, parse_to!(f64)));
-fn float<'a>(i: &'a [u8]) -> IResult<&'a [u8], f64> {
+fn float<'a, E: Er<&'a[u8]>>(i: &'a [u8]) -> IResult<&'a [u8], f64, E> {
   //println!("float");
   let second = |i: &'a [u8]| {
-    match i.parse_to() {
-      Some(o) => Ok((i.slice(i.input_len()..), o)),
-      None => Err(Err::Error(error_position!(i, ErrorKind::ParseTo)))
+    match std::str::from_utf8(i).ok().and_then(|s| s.parse::<f64>().ok()) {
+      Some(o) => Ok((&i[i.len()..], o)),
+      None => Err(Err::Error(E::from_error_kind(i, ErrorKind::ParseTo)))
     }
   };
 
-  flat_map(i, recognize_float, second)
+  flat_map(i, convert_rec_float, second)
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,14 +68,20 @@ pub enum JsonValue<'a> {
 }
 
 use std::str;
-fn parse_str(input: &[u8]) -> IResult<&[u8], &str> {
+fn parse_str<'a, E:Er<&'a[u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a str, E> {
+  // let's ignore escaping for now
+  /*
   //println!("parse_str");
   let res = map_res!(input,
     escaped!(take_while1!(is_string_character), '\\', one_of!("\"bfnrt\\")),
     str::from_utf8
   );
   //println!("parse_str({}) got {:?}", str::from_utf8(input).unwrap(), res);
-  res
+  res*/
+  match std::str::from_utf8(input) {
+    Ok(s) => Ok((&input[input.len()..], s)),
+    Err(_) => Err(Err::Error(E::from_error_kind(input, ErrorKind::ParseTo)))
+  }
 }
 
 fn string(input: &[u8]) -> IResult<&[u8], &str> {
@@ -95,10 +111,10 @@ fn key_value(input: &[u8]) -> IResult<&[u8], (&str, JsonValue)> {
   separated(input, string, char(':'), json_value)
 }
 
-fn hash_internal(input: &[u8]) -> nom::IResult<&[u8], HashMap<&str, JsonValue>> {
+fn hash_internal(input: &[u8]) -> IResult<&[u8], HashMap<&str, JsonValue>> {
   //println!("hash_internal");
   let res = match key_value(input) {
-    Err(nom::Err::Error(_)) => Ok((input, HashMap::default())),
+    Err(Err::Error(_)) => Ok((input, HashMap::default())),
     Err(e) => Err(e),
     Ok((i, (key, value))) => {
       let mut map = HashMap::default();
@@ -107,8 +123,9 @@ fn hash_internal(input: &[u8]) -> nom::IResult<&[u8], HashMap<&str, JsonValue>> 
       let mut input = i;
       loop {
         //match do_parse!(input, sp >> char!(',') >> kv: key_value >> (kv)) {
-        match do_parse!(input, char!(',') >> kv: key_value >> (kv)) {
-          Err(nom::Err::Error(_)) => break Ok((input, map)),
+        //match do_parse!(input, char!(',') >> kv: key_value >> (kv)) {
+        match preceded(input, char(','), key_value) {
+          Err(Err::Error(_)) => break Ok((input, map)),
           Err(e) => break Err(e),
           Ok((i, (key, value))) => {
             map.insert(key, value);
@@ -127,13 +144,11 @@ fn hash_internal(input: &[u8]) -> nom::IResult<&[u8], HashMap<&str, JsonValue>> 
   hash<HashMap<&str, JsonValue>>,
 */
 fn hash(input: &[u8]) -> IResult<&[u8], HashMap<&str, JsonValue>> {
-    let res = delimited!(input,
-      char!('{'),
-      return_error!(
-        hash_internal
-      ),
+    let res = delimited(input,
+      char('{'),
+      hash_internal,
       //preceded!(sp, char!('}'))
-      char!('}')
+      char('}')
     );
     //println!("hash(\"{}\") returned {:?}", str::from_utf8(input).unwrap(), res);
     res
@@ -162,6 +177,7 @@ fn root(input: &[u8]) -> IResult<&[u8], JsonValue> {
   res
 }
 
+/*
 fn test_many(input: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
   let mut counter = 0;
   let res = many0(input,
@@ -179,6 +195,7 @@ fn manytest() {
   test_many(&b"abcdabcdabcd"[..]);
   panic!();
 }
+*/
 
 fn basic(b: &mut Bencher) {
   let data = b"{\"a\":42,\"b\":[\"x\",\"y\",12],\"c\":{\"hello\":\"world\"}};";
@@ -200,11 +217,14 @@ fn parse<'a>(b: &mut Bencher, buffer: &'a[u8]) {
         return o;
       }
       Err(err) => {
-        if let &nom::Err::Error(nom::Context::Code(ref i, ref e)) = &err {
+        panic!();
+        /*
+        if let &Err::Error(nom::Context::Code(ref i, ref e)) = &err {
           panic!("got err {:?} at:\n{}", e, i.to_hex(16));
         } else {
           panic!("got err: {:?}", err)
         }
+        */
       },
     }
   });
