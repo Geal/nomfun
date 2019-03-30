@@ -28,6 +28,15 @@ pub enum Err<E> {
   Failure(E),
 }
 
+impl<E1> Err<E1> {
+  fn convert<E2: Into<E1>>(other: Err<E2>) -> Self {
+    match other {
+      Err::Incomplete(i) => Err::Incomplete(i),
+      Err::Error(e) => Err::Error(e.into()),
+      Err::Failure(e) => Err::Failure(e.into())
+    }
+  }
+}
 
 #[derive(Debug)]
 pub enum ErrorKind {
@@ -195,15 +204,13 @@ pub fn map<I, O1, O2, F, G>(input: I, first: F, second: G) -> IResult<I, O2>
   first(input).map(|(i, o1)| (i, second(o1)))
 }
 
-/*
-pub fn flat_map<I: Clone+From<O1>, O1, O2, E: Er<I>, F, G>(input: I, first: F, second: G) -> IResult<I, O2, E>
-  where F: Fn(I) -> IResult<I, O1, E>,
-        G: Fn(O1) -> IResult<O1, O2, E> {
+pub fn flat_map<I: Clone+From<O1>, O1, O2, E1: Er<I>+From<E2>, E2: Er<O1>, F, G>(input: I, first: F, second: G) -> IResult<I, O2, E1>
+  where F: Fn(I) -> IResult<I, O1, E1>,
+        G: Fn(O1) -> IResult<O1, O2, E2> {
 
   let (i, o1) = first(input)?;
   second(o1).map(|(_, o2)| (i, o2)).map_err(Err::convert)
 }
-*/
 
 pub fn many0<I: Clone+InputLength, O, E: Er<I>, F>(input: I, mut f: F) -> IResult<I, Vec<O>, E>
   where F: FnMut(I) -> IResult<I, O, E> {
