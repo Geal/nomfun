@@ -9,8 +9,6 @@ extern crate fnv;
 use fnv::FnvHashMap as HashMap;
 use bencher::{Bencher, black_box};
 
-//use {digit, be_u32, IResult, Err, ErrorKind, InputTakeAtPosition, Convert, recognize_float,
-//  ParseTo, Slice, InputLength, Needed,HexDisplay};
 use nomfun::*;
 use std::fmt::Debug;
 use std::str::from_utf8;
@@ -26,11 +24,11 @@ pub fn is_space(c: u8) -> bool {
 
 
 //named!(sp, take_while!(is_space));
-fn sp(input: &[u8]) -> IResult<&[u8], &[u8]> {
+fn sp<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8], E> {
   take_while(input, is_space)
 }
 
-fn sp2(input: &[u8]) -> IResult<&[u8], &[u8]> {
+fn sp2<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8], E> {
   let chars = b" \t\r\n";
 
   take_while(input, |c| chars.contains(&c))
@@ -87,14 +85,14 @@ fn parse_str<'a, E:Er<&'a[u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a str, E
   }
 }
 
-fn string(input: &[u8]) -> IResult<&[u8], &str> {
+fn string<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], &'a str, E> {
   //println!("string");
   let res = delimited(input, char('\"'), parse_str, char('\"'));
   //println!("string(\"{}\") returned {:?}", str::from_utf8(input).unwrap(), res);
   res
 }
 
-fn boolean(input: &[u8]) -> IResult<&[u8], bool> {
+fn boolean<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], bool, E> {
   //println!("boolean");
   or(input, &[
    &|i| { value(i, tag(&b"false"[..]), false) },
@@ -102,7 +100,7 @@ fn boolean(input: &[u8]) -> IResult<&[u8], bool> {
   ])
 }
 
-fn array(input: &[u8]) -> IResult<&[u8], Vec<JsonValue>> {
+fn array<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], Vec<JsonValue>, E> {
   //println!("array");
   delimited(input,
     char('['),
@@ -111,20 +109,20 @@ fn array(input: &[u8]) -> IResult<&[u8], Vec<JsonValue>> {
   )
 }
 
-fn key_value(input: &[u8]) -> IResult<&[u8], (&str, JsonValue)> {
+fn key_value<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], (&'a str, JsonValue), E> {
   //println!("key_value");
   let res = separated(input, string, char(':'), json_value);
   //println!("key_value(\"{}\") returned {:?}", str::from_utf8(input).unwrap(), res);
   res
 }
 
-fn comma_kv(i: &[u8]) -> IResult<&[u8], (&str, JsonValue)> {
+fn comma_kv<'a, E: Er<&'a [u8]>>(i: &'a[u8]) -> IResult<&'a [u8], (&'a str, JsonValue), E> {
   let (i, _) = sp(i)?;
   let (i, _) = char(',')(i)?;
   key_value(i)
 }
 
-fn hash_internal(input: &[u8]) -> IResult<&[u8], HashMap<&str, JsonValue>> {
+fn hash_internal<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], HashMap<&'a str, JsonValue>, E> {
   //println!("hash_internal");
   let res = match key_value(input) {
     Err(Err::Error(_)) => Ok((input, HashMap::default())),
@@ -157,7 +155,7 @@ fn hash_internal(input: &[u8]) -> IResult<&[u8], HashMap<&str, JsonValue>> {
 /*named!(
   hash<HashMap<&str, JsonValue>>,
 */
-fn hash(input: &[u8]) -> IResult<&[u8], HashMap<&str, JsonValue>> {
+fn hash<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], HashMap<&'a str, JsonValue>, E> {
     let res = delimited(input,
       char('{'),
       hash_internal,
@@ -168,7 +166,7 @@ fn hash(input: &[u8]) -> IResult<&[u8], HashMap<&str, JsonValue>> {
     res
 }
 
-fn json_value(input: &[u8]) -> IResult<&[u8], JsonValue> {
+fn json_value<'a, E: Er<&'a [u8]>>(input: &'a[u8]) -> IResult<&'a[u8], JsonValue, E> {
   //println!("json_value");
   let res = or(input, &[
    &|i| { map(i, string, JsonValue::Str) },
@@ -181,7 +179,7 @@ fn json_value(input: &[u8]) -> IResult<&[u8], JsonValue> {
   res
 }
 
-fn root(input: &[u8]) -> IResult<&[u8], JsonValue> {
+fn root<'a, E: Er<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], JsonValue, E> {
   //println!("root");
   let res = or(input, &[
    &|i| { map(i, array, JsonValue::Array) },
@@ -191,59 +189,41 @@ fn root(input: &[u8]) -> IResult<&[u8], JsonValue> {
   res
 }
 
-/*
-fn test_many(input: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
-  let mut counter = 0;
-  let res = many0(input,
-    |i| {
-      counter = counter + 1;
-      tag!(i, "abcd")
-    });
-
-  println!("counter: {}", counter);
-  res
-}
-
-#[test]
-fn manytest() {
-  test_many(&b"abcdabcdabcd"[..]);
-  panic!();
-}
-*/
-
 fn basic(b: &mut Bencher) {
   let data = b"{\"a\":42,\"b\":[\"x\",\"y\",12],\"c\":{\"hello\":\"world\"}};";
   //let data = b"{}";
 
   b.bytes = data.len() as u64;
-  parse(b, &data[..])
+  parse::<(&[u8], u32)>(b, &data[..])
 }
 
-fn parse<'a>(b: &mut Bencher, buffer: &'a[u8]) {
-  let res = root(buffer);
+fn verbose(b: &mut Bencher) {
+  let data = b"{\"a\":42,\"b\":[\"x\",\"y\",12],\"c\":{\"hello\":\"world\"}};";
+  //let data = b"{}";
+
+  b.bytes = data.len() as u64;
+  parse::<Verbose<&[u8]>>(b, &data[..])
+}
+
+fn parse<'a, E: Er<&'a[u8]>+Debug>(b: &mut Bencher, buffer: &'a[u8]) {
+  let res: IResult<_, _, E> = root(buffer);
   //println!("res: {:?}", res);
   assert!(res.is_ok());
 
   b.iter(|| {
     let mut buf = black_box(buffer);
-    match root(buf) {
+    let res: IResult<_, _, E> = root(buf);
+    match res {
       Ok((i, o)) => {
         return o;
       }
       Err(err) => {
         panic!("got parsing error: {:?}", err);
-        /*
-        if let &Err::Error(nom::Context::Code(ref i, ref e)) = &err {
-          panic!("got err {:?} at:\n{}", e, i.to_hex(16));
-        } else {
-          panic!("got err: {:?}", err)
-        }
-        */
       },
     }
   });
 }
 
 
-benchmark_group!(json, basic);
+benchmark_group!(json, basic, verbose);
 benchmark_main!(json);
