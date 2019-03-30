@@ -13,6 +13,7 @@ use bencher::{Bencher, black_box};
 //  ParseTo, Slice, InputLength, Needed,HexDisplay};
 use nomfun::*;
 use std::fmt::Debug;
+use std::str::from_utf8;
 
 pub fn is_string_character(c: u8) -> bool {
   //FIXME: should validate unicode character
@@ -49,7 +50,7 @@ fn convert_rec_float<'a, E: Er<&'a [u8]>>(input: &'a [u8]) -> IResult<&'a [u8], 
 fn float<'a, E: Er<&'a[u8]>>(i: &'a [u8]) -> IResult<&'a [u8], f64, E> {
   //println!("float");
   let second = |i: &'a [u8]| {
-    match std::str::from_utf8(i).ok().and_then(|s| s.parse::<f64>().ok()) {
+    match from_utf8(i).ok().and_then(|s| s.parse::<f64>().ok()) {
       Some(o) => Ok((&i[i.len()..], o)),
       None => Err(Err::Error(E::from_error_kind(i, ErrorKind::ParseTo)))
     }
@@ -78,15 +79,19 @@ fn parse_str<'a, E:Er<&'a[u8]>>(input: &'a [u8]) -> IResult<&'a [u8], &'a str, E
   );
   //println!("parse_str({}) got {:?}", str::from_utf8(input).unwrap(), res);
   res*/
-  match std::str::from_utf8(input) {
-    Ok(s) => Ok((&input[input.len()..], s)),
+  let (i, data) = take_while(input, |c| c != b'"')?;
+  //println!("parse_str: data is {}", from_utf8(data).unwrap());
+  match from_utf8(data) {
+    Ok(s) => Ok((i, s)),
     Err(_) => Err(Err::Error(E::from_error_kind(input, ErrorKind::ParseTo)))
   }
 }
 
 fn string(input: &[u8]) -> IResult<&[u8], &str> {
   //println!("string");
-  delimited(input, char('\"'), parse_str, char('\"'))
+  let res = delimited(input, char('\"'), parse_str, char('\"'));
+  //println!("string(\"{}\") returned {:?}", str::from_utf8(input).unwrap(), res);
+  res
 }
 
 fn boolean(input: &[u8]) -> IResult<&[u8], bool> {
@@ -108,7 +113,15 @@ fn array(input: &[u8]) -> IResult<&[u8], Vec<JsonValue>> {
 
 fn key_value(input: &[u8]) -> IResult<&[u8], (&str, JsonValue)> {
   //println!("key_value");
-  separated(input, string, char(':'), json_value)
+  let res = separated(input, string, char(':'), json_value);
+  //println!("key_value(\"{}\") returned {:?}", str::from_utf8(input).unwrap(), res);
+  res
+}
+
+fn comma_kv(i: &[u8]) -> IResult<&[u8], (&str, JsonValue)> {
+  let (i, _) = sp(i)?;
+  let (i, _) = char(',')(i)?;
+  key_value(i)
 }
 
 fn hash_internal(input: &[u8]) -> IResult<&[u8], HashMap<&str, JsonValue>> {
@@ -124,7 +137,8 @@ fn hash_internal(input: &[u8]) -> IResult<&[u8], HashMap<&str, JsonValue>> {
       loop {
         //match do_parse!(input, sp >> char!(',') >> kv: key_value >> (kv)) {
         //match do_parse!(input, char!(',') >> kv: key_value >> (kv)) {
-        match preceded(input, char(','), key_value) {
+        //match preceded(input, char(','), key_value) {
+        match comma_kv(input) {
           Err(Err::Error(_)) => break Ok((input, map)),
           Err(e) => break Err(e),
           Ok((i, (key, value))) => {
@@ -217,7 +231,7 @@ fn parse<'a>(b: &mut Bencher, buffer: &'a[u8]) {
         return o;
       }
       Err(err) => {
-        panic!();
+        panic!("got parsing error: {:?}", err);
         /*
         if let &Err::Error(nom::Context::Code(ref i, ref e)) = &err {
           panic!("got err {:?} at:\n{}", e, i.to_hex(16));
